@@ -3,8 +3,6 @@
 __author__ = "asperlea@colgate.edu, cwmahoney@colgate.edu"
 __doc__ = '''
 A simple model-view controller-based message board/chat client application.
--Now including stop-and-wait and a checksum implementation
-2/9/2014
 '''
 
 import sys

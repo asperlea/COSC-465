@@ -22,39 +22,87 @@ class MessageBoardNetwork(object):
 	respective methods, below) and return the message or
 	response data back to the MessageBoardController class.
 	'''
-	def __init__(self, host, port):
+	def __init__(self, host, port, retries, timeout):
 		'''
 		Constructor.  You should create a new socket
 		here and do any other initialization.
 		'''
 		self.host = host
 		self.port = port
+		self.retries = retries
+		self.timeout = timeout
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+		
+		self.seqnum = '0' #initializing sequence number
+	
+	def mb_checksum(self, s): #Checksum code
+		checksum = 0x0
+	
+		for c in s:
+			ordval = ord(c)
+			checksum = checksum ^ ordval
+		
+		return chr(checksum)
+		
+	def build_pckt(self, message):
+		header = 'C' + self.seqnum + self.mb_checksum(message)
+		return header + message
+		
+	def seq_switch(self):
+		if self.seqnum == '0':
+			self.seqnum = '1'
+		else:
+			self.seqnum = '0'
 
 	def getMessages(self):
 		'''
 		You should make calls to get messages from the message 
 		board server here.
 		'''
-		self.sock.sendto("AGET", (self.host, self.port))
-		(readlist, writelist, errlist) = select([self.sock], [], [], 0.1)
-		if len(readlist) > 0:
-			(data, serveraddr) = readlist[0].recvfrom(1400)
-			return data
-		else:
-			return ""
+		packet = self.build_pckt("GET")
+		
+		for i in range(self.retries):
+			self.sock.sendto(packet, (self.host, self.port))
+			(readlist, writelist, errlist) = select([self.sock], [], [], self.timeout)
+			if len(readlist) > 0:
+				(data, serveraddr) = readlist[0].recvfrom(1400)
+				
+				if data[0] == 'C':
+					if data[1] == self.seqnum:
+						if data[2] == self.mb_checksum(data[3:]): #Could just AND it, but more readable this way
+							self.seq_switch()
+							return data
+							
+			#else: we've timed out. Repeat the loop
+			
+		print "Timeout on message-pull"
+		
+		return "AAARequest for messages dropped." #Will get thrown onto the view as a message by the Controller
 
 	def postMessage(self, user, message):
 		'''
 		You should make calls to post messages to the message 
 		board server here.
 		'''
-		self.sock.sendto("APOST " + user + "::" + message, (self.host, self.port))
-		(readlist, writelist, errlist) = select([self.sock], [], [], 0.1)
-		if len(readlist) > 0:
-			(data, serveraddr) = readlist[0].recvfrom(1400)
-			return data
-		return "" #How we handle timeouts on waiting for the response
+		packet = self.build_pckt("POST " + user + "::" + message)
+		
+		for i in range(self.retries):
+			self.sock.sendto(packet, (self.host, self.port))
+			(readlist, writelist, errlist) = select([self.sock], [], [], self.timeout)
+			if len(readlist) > 0:
+				(data, serveraddr) = readlist[0].recvfrom(1400)
+				
+				if data[0] == 'C':
+					if data[1] == self.seqnum:
+						if data[2] == self.mb_checksum(data[3:]): #Could just AND it, but more readable this way
+							self.seq_switch()
+							return data
+							
+			#else: we've timed out. Repeat the loop
+				
+		print "Timeout on message:", packet[11:]
+		
+		return "AAAPost dropped." #Will get thrown onto the view as a message by the Controller
 
 
 class MessageBoardController(object):
@@ -64,11 +112,11 @@ class MessageBoardController(object):
 	to/from the server via the MessageBoardNetwork class.
 	'''
 
-	def __init__(self, myname, host, port):
+	def __init__(self, myname, host, port, retries, timeout):
 		self.name = myname
 		self.view = MessageBoardView(myname)
 		self.view.setMessageCallback(self.post_message_callback)
-		self.net = MessageBoardNetwork(host, port)
+		self.net = MessageBoardNetwork(host, port, retries, timeout)
 
 	def run(self):
 		self.view.after(1000, self.retrieve_messages)
@@ -82,11 +130,11 @@ class MessageBoardController(object):
 		postMessage method.
 		'''
 		response = self.net.postMessage(myname, m)
-		if response == "AOK":
+		if response[3:] == "OK":
 			self.view.setStatus("Message sent.")
 		else: #error
 			#print response + " The post is wrong"
-			self.view.setStatus(response[1:]) #Slice off the 'A'
+			self.view.setStatus(response[3:]) #Slice off the header
 
 	def retrieve_messages(self):
 		'''
@@ -107,8 +155,10 @@ class MessageBoardController(object):
 		'''
 		self.view.after(1000, self.retrieve_messages)
 		messagedata = self.net.getMessages()
-		if messagedata[0:3] == "AOK": # if everything went well
-			messagedata = messagedata[4:] #get rid of header
+		
+		#if messagedata[0] == 'C' and messagedata[1] == self.net.seqnum and messagedata[2] == self.net.mb_checksum(messagedata[3:]):
+		if messagedata[3:5] == "OK": # if everything went well
+			messagedata = messagedata[6:] #get rid of header
 			messages = messagedata.split("@") #split messages
 
 			for i in range(1, len(messages)):
@@ -117,7 +167,7 @@ class MessageBoardController(object):
 			self.view.setStatus("Retrieved " + str(len(messages)-1) + " messages.")
 		else:
 			#print messagedata + " Don't see this"
-			self.view.setStatus(messagedata[1:]) #slice off 'A'
+			self.view.setStatus(messagedata[3:]) #slice off header
 
 class MessageBoardView(Tkinter.Frame):
 	'''
@@ -195,11 +245,16 @@ if __name__ == '__main__':
 						help='Set the host name for server to send requests to (default: localhost)')
 	parser.add_argument('--port', dest='port', type=int, default=1111,
 						help='Set the port number for the server (default: 1111)')
+						
+	###New for Prj 2
+	parser.add_argument("--retries", dest='retries', type=int, default=3, help="Set the number of retransmissions in case of a timeout")
+	parser.add_argument("--timeout", dest='timeout', type=float, default=0.1, help="Set the RTO value")
+	###
 	args = parser.parse_args()
 
 	myname = raw_input("What is your user name (max 8 characters)? ")
 
-	app = MessageBoardController(myname, args.host, args.port)
+	app = MessageBoardController(myname, args.host, args.port, args.retries, args.timeout)
 	app.run()
 
 
