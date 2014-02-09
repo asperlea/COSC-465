@@ -99,12 +99,11 @@ class MessageBoardNetwork(object):
 							return data
 							
 			#else: we've timed out. Repeat the loop
-				
-		print "Timeout on message:", packet[11:]
+			
+		index = packet.find("::") #Used for nice output
+		print "Timeout on message:", packet[index + 2:]
+		return "AAAPost dropped." #Will get thrown onto the view as a message by the Controllers	
 		
-		return "AAAPost dropped." #Will get thrown onto the view as a message by the Controller
-
-
 class MessageBoardController(object):
 	'''
 	Controller class in MVC pattern that coordinates
