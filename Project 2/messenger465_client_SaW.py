@@ -69,7 +69,7 @@ class MessageBoardNetwork(object):
 				
 				if data[0] == 'C':
 					if data[1] == '1' or data[1] == '0': #Sequence bit uncorrupted
-						if data[1] == self.seqnum:						
+						if data[1] == self.seqnum:
 							if data[2] == self.mb_checksum(data[3:]): #Could just AND it, but more readable this way
 								self.seq_switch()
 								return data
@@ -97,10 +97,13 @@ class MessageBoardNetwork(object):
 				(data, serveraddr) = readlist[0].recvfrom(1400)
 				
 				if data[0] == 'C':
-					if data[1] == self.seqnum:
-						if data[2] == self.mb_checksum(data[3:]): #Could just AND it, but more readable this way
-							self.seq_switch()
-							return data
+					if data[1] == '1' or data[1] == '0': #Sequence bit uncorrupted
+						if data[1] == self.seqnum:
+							if data[2] == self.mb_checksum(data[3:]): #Could just AND it, but more readable this way
+								self.seq_switch()
+								return data
+						else: #sequence number is off, server got our message already but its ACK was dropped
+							return "" #Stop sending this packet
 							
 			#else: we've timed out. Repeat the loop
 			
