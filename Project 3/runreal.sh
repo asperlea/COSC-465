@@ -1,2 +1,2 @@
 #!/bin/bash
-python ./srpy/srpy.py $@ myrouter1
+python ./srpy/srpy.py $@ myrouter

@@ -42,10 +42,10 @@ class Router(object):
 						self.ip_to_ether[src_ip] = src_eth
 					
 					hwdst = None
-					if dst_ip in self.my_interfaces: #lookup eth
+					if dst_ip in self.my_interfaces:
 						hwdst = self.my_interfaces[dst_ip]
 							
-					if hwdst != None: #if we have that ip
+					if hwdst != None:
 						arp_rep = arp() #Build up packet
 						
 						arp_rep.opcode = arp.REPLY
