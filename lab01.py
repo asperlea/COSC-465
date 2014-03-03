@@ -11,7 +11,7 @@ def mb_checksum(s):
 		for num in numlist:
 			if num & (1 << i):
 				num_ones += 1
-		if num_ones % 2 == 1:
+		if num_ones % 2 == 1: #if there was an odd number of ones add a one at that position in the checksum
 			checksum |= (1 << i)
 	return chr(checksum)
 

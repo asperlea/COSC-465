@@ -26,6 +26,42 @@ class Router(object):
 		for intf in net.interfaces():
 			self.my_interfaces[intf.ipaddr] = intf.ethaddr
 
+    def findEth(ip, ipToEther) 
+        '''
+        Returns the Ethernet address for an IP address given a dictionary of IP to ethernet
+        '''
+        if ip in ipToEther:
+            return ipToEther[ip]
+        return None
+
+    def addToEth(ip, eth, ipToEther)
+        '''
+        Adds an IP to Ethernet address to a dictionary of IP to ethernet
+        '''
+        if not (ip in ipToEther):
+            ipToEther[ip] = eth
+
+    def makeReply(dst_ip, src_ip, hwdst, src_eth):
+        '''
+        Creates an ARP reply packet given IP source and destination, Ethernet source and destination
+        '''
+
+        arp_rep = arp() #Build up packet
+		
+		arp_rep.opcode = arp.REPLY
+		arp_rep.protosrc = dst_ip
+		arp_rep.protodst = src_ip
+		arp_rep.hwsrc = hwdst #Matching ether
+		arp_rep.hwdst = src_eth
+		
+		ether = ethernet() #wrap in ether
+		ether.type = ether.ARP_TYPE
+		ether.set_payload(arp_rep)
+		ether.src = hwdst
+		ether.dst = src_eth
+
+        return ether
+
 	def router_main(self):	
 		while True:
 			try:
@@ -38,29 +74,14 @@ class Router(object):
 					src_eth = payload.hwsrc
 					#no dst
 					
-					if not(src_ip in self.ip_to_ether): #For later use
-						self.ip_to_ether[src_ip] = src_eth
+                    addToEth(src_ip, src_eth, self.ip_to_ether) #For later use\
 					
-					hwdst = None
-					if dst_ip in self.my_interfaces: #lookup eth
-						hwdst = self.my_interfaces[dst_ip]
+                    hwdst = findEth(dst_ip) #look up eth
 							
 					if hwdst != None: #if we have that ip
-						arp_rep = arp() #Build up packet
-						
-						arp_rep.opcode = arp.REPLY
-						arp_rep.protosrc = dst_ip
-						arp_rep.protodst = src_ip
-						arp_rep.hwsrc = hwdst #Matching ether
-						arp_rep.hwdst = src_eth
-						
-						ether = ethernet() #wrap in ether
-						ether.type = ether.ARP_TYPE
-						ether.set_payload(arp_rep)
-						ether.src = hwdst
-						ether.dst = src_eth
-						
-						self.net.send_packet(dev, ether) #send it off
+                        reply = makeReply(dst_ip, src_ip, hwdst, src_eth)
+                        
+                        self.net.send_packet(dev, reply) #send it off
 			except SrpyNoPackets:
 				# log_debug("Timeout waiting for packets")
 				continue
