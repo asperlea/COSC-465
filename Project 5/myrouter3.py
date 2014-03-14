@@ -78,11 +78,22 @@ class Router(object):
     def makeEcho(self, request):
         icmppkt = pktlib.icmp()
         icmppkt.type = pktlib.TYPE_ECHO_REPLY
+
         reply = pktlib.echo()
         reply.id = request.id
         reply.seq = request.seq
         reply.payload = request.payload
+
         icmppkt.payload = reply
+        return icmppkt
+
+    def makeICMP(self, errorType, codeType, ippkt):
+        icmppkt = pktlib.icmp()
+        icmppkt.type = errorType
+        icmppkt.code = codeType
+        icmppkt.payload = pktlib.unreach()
+        
+        icmppkt.payload.payload = ippkt.dump()[:28]
         return icmppkt
 
     def makeIP(self, icmppkt, ipsrc, ipdest):
@@ -90,6 +101,7 @@ class Router(object):
         ippkt.srcip = ipdest
         ippkt.dstip = ipsrc
         ippkt.ttl = 64 # a reasonable initial TTL value
+        ippkt.protocol = ippkt.ICMP_PROTOCOL
         ippkt.payload = icmppkt
         return ippkt
         
@@ -156,8 +168,12 @@ class Router(object):
                 difference = time.time() - stalled.start_time
             
                 if difference/stalled.tries > 1:
-                    if stalled.tries >=5: #Timeout, call it a day on this IP and its packets
-                        continue
+                    if stalled.tries >=5: #Timeout, send ICMP timeout
+                        ether = stalled.packet_list[0] # one of the ethernet packets that are queued up is all we need to get IP info
+                        print "This stalled: ", stalled.packet_list[0].dump()
+                        icmp_error = self.makeICMP(pktlib.TYPE_DEST_UNREACH, pktlib.CODE_UNREACH_HOST, ether.payload)
+                        ip_reply = self.makeIP(icmp_error, ether.payload.srcip, self.nameMap[stalled.intf_name][1])
+                        # self.forward_packet(ip_reply) this doesn't work yet
                     else:
                         self.net.send_packet(stalled.intf_name, stalled.arp_req) #Send ARP again
                         stalled.tries += 1
@@ -174,7 +190,6 @@ class Router(object):
                 
                 dev,ts,pkt = self.net.recv_packet(timeout=1.0)
                 payload = pkt.payload
-                
                 if pkt.type == pkt.ARP_TYPE: #Is an ARP
                     src_ip = payload.protosrc
                     dst_ip = payload.protodst
@@ -197,17 +212,32 @@ class Router(object):
                 elif pkt.type == pkt.IP_TYPE:
                     if payload.dstip in self.my_interfaces: #Sent to us, just dropping it for now
                         inner = payload.payload
-                        if inner.type == pktlib.TYPE_ECHO_REQUEST:
-                            icmp_reply = self.makeEcho(inner.payload)
-                            ip_reply = self.makeIP(icmp_reply, payload.srcip, payload.dstip)
-                            payload = ip_reply
+                        if inner.find("icmp") and inner.type == pktlib.TYPE_ECHO_REQUEST:
+                            icmp_reply = self.makeEcho(inner.payload) # make ICMP header
+                            ip_reply = self.makeIP(icmp_reply, payload.srcip, self.nameMap[dev][1]) # make IP header
+                            pkt.payload = ip_reply # put it in the packet to be sent forward
+                            payload = pkt.payload
                         else:
-                            continue
+                            icmp_error = self.makeICMP(pktlib.TYPE_DEST_UNREACH, pktlib.CODE_UNREACH_PORT, payload) # make ICMP error
+                            ip_reply = self.makeIP(icmp_error, payload.srcip, self.nameMap[dev][1]) # make IP header
+                            pkt.payload = ip_reply # send it off
+                            payload = pkt.payload
+
+                    payload.ttl -= 1
+                    if payload.ttl == 0:
+                        icmp_error = self.makeICMP(pktlib.TYPE_TIME_EXCEED, 0, payload) # make ICMP error
+                        ip_reply = self.makeIP(icmp_error, payload.srcip, self.nameMap[dev][1]) # wrap it in IP
+                        pkt.payload = ip_reply # send it off
+                        payload = pkt.payload
                     
                     match = self.matchPrefix(payload.dstip)
                     if match == None: #No entry on table matched
-                        continue #drop the packet, for now
-                        
+                        icmp_error = self.makeICMP(pktlib.TYPE_DEST_UNREACH, pktlib.CODE_UNREACH_NET, payload) # make ICMP error
+                        ip_reply = self.makeIP(icmp_error, payload.srcip, self.nameMap[dev][1]) # wrap it in IP
+                        pkt.payload = ip_reply # send it off
+                        payload = pkt.payload
+                        match = self.matchPrefix(payload.dstip)
+                    
                     next_hop = match[1] #Ease of use
                     name = match[2]
                     
@@ -218,14 +248,11 @@ class Router(object):
             
                     src_eth = self.nameMap[name][0] #Pull ip/eth corresponding to this interface
                     src_ip = self.nameMap[name][1]
-
-                    payload.ttl -= 1
                     
                     ether = ethernet() #wrap ip in ether
                     ether.type = ether.IP_TYPE
                     ether.set_payload(payload)
                     ether.src = src_eth
-                    
                     if nxt_ip in self.ip_to_ether: #We have the mapping nxt_ip->eth
                         ether.dst = self.ip_to_ether[nxt_ip]
                         self.net.send_packet(name, ether) #Send packet on its way
@@ -233,13 +260,10 @@ class Router(object):
                         if nxt_ip in arp_ip: #Already waiting on ARP for this
                             arp_ip[nxt_ip].addPacket(ether)
                         else: #New IP to ARP at
-                            request     = self.makeRequest(nxt_ip, src_ip, src_eth) #create ARP req
+                            request = self.makeRequest(nxt_ip, src_ip, src_eth) #create ARP req
                             waiter = arpWaiter(name, request, ether)
                             arp_ip[nxt_ip] = waiter
-                            
                             self.net.send_packet(name, request) #Send ARP request
-                        
-                        
 
             except SrpyNoPackets:
                 # log_debug("Timeout waiting for packets")
