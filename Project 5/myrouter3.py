@@ -206,6 +206,7 @@ class Router(object):
             else:
                 difference = time.time() - stalled.start_time
             
+                sentICMP = False
                 if difference/stalled.tries > 1:
                     if stalled.tries >=5: #Timeout, send ICMP timeout
                         ether = stalled.packet_list[0] # one of the ethernet packets that are queued up is all we need to get IP info
@@ -215,11 +216,13 @@ class Router(object):
                         ether.type = ether.IP_TYPE
                         ether.set_payload(ip_reply)
                         self.forward_packet(ether, stalled.intf_name) 
+                        sentICMP = True
                     else:
                         self.net.send_packet(stalled.intf_name, stalled.arp_req) #Send ARP again
                         stalled.tries += 1
                     
-                self.arp_ip[dst] = stalled #Add stalled back to the dict
+                if not sentICMP:
+                    self.arp_ip[dst] = stalled #Add stalled back to the dict
                 
     def router_main(self):
         self.arp_ip = {} #Empty dict for IP's we're waiting for ARPs on
