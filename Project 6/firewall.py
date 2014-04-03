@@ -1,0 +1,241 @@
+import sys
+import os
+import os.path
+sys.path.append(os.path.join(os.environ['HOME'],'pox'))
+sys.path.append(os.path.join(os.getcwd(),'pox'))
+import pox.lib.packet as pktlib
+from pox.lib.packet import ethernet,ETHER_BROADCAST,IP_ANY
+from pox.lib.packet import arp,ipv4,icmp,unreach,udp,tcp
+from pox.lib.addresses import EthAddr,IPAddr,netmask_to_cidr,cidr_to_netmask,parse_cidr
+import time
+
+from sets import Set
+
+#Curt Mahoney & Adriana Sperlea
+#4/3/2014
+
+class Firewall(object):
+    def __init__(self):
+        f = open("firewall_rules.txt",'r')
+        
+        protocols = {"ip": 4, "icmp": 1, "tcp": 6, "udp": 17} #mappings from names to protocol numbers
+        
+        self.rule_set = [] #Empty list for Rule objects
+        self.buckets = Set() #Empty set to store buckets for easy update
+        
+        for line in f:
+            line = line.strip()
+            if len(line) == 0 or line[0] == '#': #Skip comments and empty lines
+                continue
+            
+            rule_list = line.split(' ') #Split into a list
+            
+            rate_lmt = -1 #Initial declaration before we know if a real rate limit exists
+            src_port = None
+            dst_port = None
+            token_bucket = None
+            
+            #Refer to firewall_rules.txt for the logic behind what indices are referenced
+            
+            permit = rule_list[0] == "permit"
+            
+            protocol_num = protocols[rule_list[1]]
+            
+            #skip indices 2, 4 because they're always the same            
+            src_mask = self.get_mask(rule_list[3])
+            
+            if protocol_num > 4: #Not IP or ICMP. A bit of a magic number, but that's what comments are for
+                src_port = self.get_port(rule_list[5])
+                dst_mask = self.get_mask(rule_list[7])
+                dst_port = self.get_port(rule_list[9])
+                
+                if permit and len(rule_list) == 12: #Rate lmt exists
+                    token_bucket = TokenBucket(int(rule_list[11]))
+                    self.buckets.add(token_bucket) #Track all the buckets we have on hand for easy-updating
+            else:
+                dst_mask = self.get_mask(rule_list[5])
+                
+                if permit and len(rule_list) == 8: #We have a rate limit in place
+                    token_bucket = TokenBucket(int(rule_list[7]))
+                    self.buckets.add(token_bucket)
+              
+            new_rule = Rule(permit, protocol_num, src_mask, dst_mask, src_port, dst_port, token_bucket)      
+            self.rule_set.append(new_rule)
+            
+        f.close()
+                      
+        #ip, icmp, udp, tcp
+        # load the firewall_rules.txt file, initialize some data
+        # structure(s) that hold the rule representations
+        #pass
+        
+    def get_mask(self, ip_addr):
+        if ip_addr == "any":
+            return cidr_to_netmask(0).toUnsigned() #0.0...
+            
+        parsed = parse_cidr(ip_addr)
+        
+        number = parsed[0].toUnsigned()
+        shift_clean = 32 - parsed[1] #So we can ignore anything the netmask tells us to
+
+        cleaned = (number>>(shift_clean))<<shift_clean #Wipe out dangling 1's
+
+        return cleaned
+        
+    def get_port(self, port_num):
+        if port_num == "any":
+            return -1 #Indicates the "any" as an int
+        else:
+            return int(port_num)
+        
+    def update_token_buckets(self):
+        '''
+        Update all the buckets.
+        '''
+        for bucket in self.buckets:
+            bucket.increment()
+        
+    def allow(self, pkt): #Amusingly, I called this "allow" before seeing your test() code
+        '''
+        Does the meat and potatoes checking of packets
+        Takes an ip packet as input
+        '''
+        check_port = pkt.protocol > 4 #Means pkt is TCP or UDP, in this implementation environment
+        
+        if check_port:
+            src_port = pkt.payload.srcport
+            dst_port = pkt.payload.dstport
+            
+        src_ip = pkt.srcip.toUnsigned()
+        dst_ip = pkt.dstip.toUnsigned()
+        
+        for rule in self.rule_set:
+            #They aren't nested. This is to pop out of the for-loop faster and avoid unnecessary comparisons after we fail a test
+            if rule.protocol != pkt.protocol:
+                continue
+            if rule.src_mask & src_ip != rule.src_mask:
+                continue
+            if rule.dst_mask & dst_ip != rule.dst_mask:
+                continue
+                
+            if check_port:
+                if rule.dst_port != -1 and rule.dst_port != dst_port:
+                    continue
+                if rule.src_port != -1 and rule.src_port != src_port:
+                    continue
+                    
+            #Passed all the checks, this packet has met the rule
+            if rule.permitted:
+                if rule.bucket != None:
+                    return rule.bucket.decrement(pkt)
+                return True
+            return False
+            
+        return True #Default to letting packets through
+        
+class Rule(object):
+    '''
+    Holds onto rules for safekeeping
+    '''
+    
+    def __init__(self, permit_bool, protocol_num, src_mask, dst_mask, src_port, dst_port, token_bucket): #No need to record ratelimit here
+        self.permitted = permit_bool
+        self.protocol = protocol_num
+        self.src_mask = src_mask
+        self.dst_mask = dst_mask
+        
+        self.src_port = src_port
+        self.dst_port = dst_port
+        
+        self.bucket = token_bucket
+        
+        
+class TokenBucket(object):
+    '''
+    Easily manage tokens for a single flow.
+    '''
+    
+    def __init__(self, rate_limit):
+        self.max_tokens = rate_limit*2
+        self.add_tokens = rate_limit/2
+        self.num_tokens = self.max_tokens #Start with the bucket full
+        
+    def increment(self):
+        if self.num_tokens < self.max_tokens:
+            self.num_tokens = (self.num_tokens + self.add_tokens) % (self.max_tokens + 1)
+            
+    def decrement(self, ip_packet):
+        '''
+        Return True and decrement tokens if can manage it, False otherwise
+        '''
+        num_bytes = len(ip_packet.pack()) #Count the number of bytes directly
+        if num_bytes <= self.num_tokens:
+            self.num_tokens -= num_bytes
+            return True
+        return False
+ 
+
+def tests():
+     f = Firewall()
+     
+     ip = ipv4()
+     ip.srcip = IPAddr("172.16.42.1")
+     ip.dstip = IPAddr("10.0.0.2")
+     ip.protocol = 17
+     xudp = udp()
+     xudp.srcport = 53
+     xudp.dstport = 53
+     xudp.payload = "Hello, world"
+     xudp.len = 8 + len(xudp.payload)
+     ip.payload = xudp
+     print len(ip) # print the length of the packet, just for fun
+     # you can name this method what ever you like, but you'll
+     # need some method that gets periodically invoked for updating
+     # token bucket state for any rules with rate limits
+     f.update_token_buckets()
+     # again, you can name your "checker" as you want, but the
+     # idea here is that we call some method on the firewall to
+     # test whether a given packet should be permitted or denied.
+     assert(f.allow(ip) == True) #if you want to simulate a time delay and updating token buckets,
+     #you can just call time.sleep and then update the buckets.
+     time.sleep(0.5)
+     f.update_token_buckets()
+     
+     ######
+     
+     ip = ipv4()
+     ip.srcip = IPAddr("172.16.42.1")
+     ip.dstip = IPAddr("10.0.0.2")
+     ip.protocol = 6
+     
+     xtcp = tcp()
+     xtcp.srcport = 53
+     xtcp.dstport = 80
+     xtcp.payload = "Hello, world"
+     xtcp.len = 8 + len(xtcp.payload)
+     
+     ip.payload = xtcp
+     
+     print len(ip) # print the length of the packet, just for fun
+     
+     f.update_token_buckets()
+     
+     for i in range(1000): #Trying to break the bucket. Works at a bit above 400
+        if i % 100 == 0:
+            print i/100
+            
+        assert(f.allow(ip) == True)
+     
+     time.sleep(0.5)
+     f.update_token_buckets()
+     
+     
+     #####
+     
+     
+     
+ 
+if __name__ == '__main__':
+     # only call tests() if this file gets invoked directly,
+     # not if it is imported.
+     tests()

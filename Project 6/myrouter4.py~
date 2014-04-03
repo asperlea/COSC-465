@@ -237,7 +237,7 @@ class Router(object):
                 self.examineStalled() #deal with stalled that are waiting on ARPs
                 
                 dev,ts,pkt = self.net.recv_packet(timeout=0.5) #Chnged/new lines for Firewall
-                firewall.update_token_buckets()
+                firewall.increment_buckets()
                 
                 payload = pkt.payload
                 if pkt.type == pkt.ARP_TYPE: #Is an ARP
