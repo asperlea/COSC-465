@@ -31,9 +31,10 @@ class Firewall(object):
             
             rule_list = line.split(' ') #Split into a list
             
-            rate_lmt = -1 #Initial declaration before we know if a real rate limit exists
-            src_port = None
-            dst_port = None
+            rate_lmt = -1 #Initial declaration before we know if a real values exist
+            src_port = -1
+            dst_port = -1
+            
             token_bucket = None
             
             #Refer to firewall_rules.txt for the logic behind what indices are referenced
@@ -101,37 +102,34 @@ class Firewall(object):
         Does the meat and potatoes checking of packets
         Takes an ip packet as input
         '''
-        check_port = pkt.protocol > 1 #Means pkt is TCP or UDP, in this implementation environment
         
-        if check_port:
+        if pkt.protocol > 1: #Means pkt is TCP or UDP, in this implementation environment
             src_port = pkt.payload.srcport
             dst_port = pkt.payload.dstport
             
         src_ip = pkt.srcip.toUnsigned()
         dst_ip = pkt.dstip.toUnsigned()
         
+        #I do believe we managed to scrimp by with 1 real if-statement. Huzzah.
         for rule in self.rule_set:
-            #They aren't nested. This is to pop out of the for-loop faster and avoid unnecessary comparisons after we fail a test
-            if rule.protocol != -1 and rule.protocol != pkt.protocol: #Wildcard on "ip" rules
-                continue
-                
-            if rule.src_mask & src_ip != rule.src_mask:
-                continue
-            if rule.dst_mask & dst_ip != rule.dst_mask:
-                continue
-                
-            if check_port:
-                if rule.dst_port != -1 and rule.dst_port != dst_port:
-                    continue
-                if rule.src_port != -1 and rule.src_port != src_port:
-                    continue
+            #Wildcard on "ip" rules
+            if rule.protocol != -1 and rule.protocol != pkt.protocol: continue
+            
+            #-1 for both no port # and any port #
+            if rule.dst_port != -1 and rule.dst_port != dst_port: continue
+            if rule.src_port != -1 and rule.src_port != src_port: continue
+            
+            #Check masks, most expensive operation (though still staggeringly cheap) 
+            if rule.src_mask & src_ip != rule.src_mask: continue
+            if rule.dst_mask & dst_ip != rule.dst_mask: continue
+            
+            #Written like this so we avoid work on anything that misses one of the checks, rather than calculating
+            #everything despite the fact that we failed the Xth test already
                     
             #Passed all the checks, this packet has met the rule
-            if rule.permitted:
-                if rule.bucket != None:
-                    return rule.bucket.decrement(pkt)
-                return True
-            return False
+            if rule.bucket != None: #There won't be a bucket unless it's permitted
+                return rule.bucket.decrement(pkt)
+            return rule.permitted
             
         return True #Default to letting packets through
         
@@ -142,6 +140,7 @@ class Rule(object):
     
     def __init__(self, permit_bool, protocol_num, src_mask, dst_mask, src_port, dst_port, token_bucket): #No need to record ratelimit here
         self.permitted = permit_bool
+        
         self.protocol = protocol_num
         self.src_mask = src_mask
         self.dst_mask = dst_mask
@@ -200,8 +199,45 @@ def tests():
      # test whether a given packet should be permitted or denied.
      assert(f.allow(ip) == True) #if you want to simulate a time delay and updating token buckets,
      #you can just call time.sleep and then update the buckets.
-     time.sleep(0.5)
-     f.update_token_buckets()
+     ##time.sleep(0.5)
+     ##f.update_token_buckets()
+     
+     ####
+     
+     #192.168.42.0/24, should be denied
+     
+     ip = ipv4()
+     ip.srcip = IPAddr("192.168.42.1")
+     ip.dstip = IPAddr("10.0.0.2")
+     ip.protocol = 17
+     xudp = udp()
+     xudp.srcport = 53
+     xudp.dstport = 53
+     xudp.payload = "Hello, world, ye shall never know me"
+     xudp.len = 8 + len(xudp.payload)
+     ip.payload = xudp
+     print len(ip) # print the length of the packet, just for fun
+     assert(f.allow(ip) == False)
+     
+     #####
+     #permit tcp src 172.16.42.0/24 srcport any dst any dstport 443
+     
+     ip = ipv4()
+     ip.srcip = IPAddr("172.16.42.3")
+     ip.dstip = IPAddr("192.168.0.2")
+     ip.protocol = 6
+     
+     xtcp = tcp()
+     xtcp.srcport = 666
+     xtcp.dstport = 443
+     xtcp.payload = "And so I shall pass from this world and into the next"
+     xtcp.len = 8 + len(xtcp.payload)
+     
+     ip.payload = xtcp
+     
+     print len(ip) # print the length of the packet, just for fun
+     
+     assert(f.allow(ip) == True)
      
      ######
      
@@ -220,19 +256,15 @@ def tests():
      
      print len(ip) # print the length of the packet, just for fun
      
-     f.update_token_buckets()
-     
      for i in range(1000): #Trying to break the bucket. Works at a bit above 400
         if i % 100 == 0:
-            print i/100
-            
+            print i/100            
         assert(f.allow(ip) == True)
+        
+     #####
      
      time.sleep(0.5)
      f.update_token_buckets()
-     
-     
-     #####
      
      
      
