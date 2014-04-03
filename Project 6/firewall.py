@@ -45,7 +45,7 @@ class Firewall(object):
             #skip indices 2, 4 because they're always the same            
             src_mask = self.get_mask(rule_list[3])
             
-            if protocol_num > 4: #Not IP or ICMP. A bit of a magic number, but that's what comments are for
+            if protocol_num > 1: #Not wildcard or ICMP. A bit of a magic number, but that's what comments are for
                 src_port = self.get_port(rule_list[5])
                 dst_mask = self.get_mask(rule_list[7])
                 dst_port = self.get_port(rule_list[9])
@@ -101,7 +101,7 @@ class Firewall(object):
         Does the meat and potatoes checking of packets
         Takes an ip packet as input
         '''
-        check_port = pkt.protocol > 4 #Means pkt is TCP or UDP, in this implementation environment
+        check_port = pkt.protocol > 1 #Means pkt is TCP or UDP, in this implementation environment
         
         if check_port:
             src_port = pkt.payload.srcport
