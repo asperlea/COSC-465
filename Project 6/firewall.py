@@ -18,9 +18,10 @@ class Firewall(object):
     def __init__(self):
         f = open("firewall_rules.txt",'r')
         
-        protocols = {"ip": 4, "icmp": 1, "tcp": 6, "udp": 17} #mappings from names to protocol numbers
+        protocols = {"ip": -1, "icmp": 1, "tcp": 6, "udp": 17} #mappings from names to protocol number
+        #"ip" is a wildcard for any protocol, so -1
         
-        self.rule_set = [] #Empty list for Rule objects
+        self.rule_set = [] #Empty list for Rule objects        
         self.buckets = Set() #Empty set to store buckets for easy update
         
         for line in f:
@@ -111,8 +112,9 @@ class Firewall(object):
         
         for rule in self.rule_set:
             #They aren't nested. This is to pop out of the for-loop faster and avoid unnecessary comparisons after we fail a test
-            if rule.protocol != pkt.protocol:
+            if rule.protocol != -1 and rule.protocol != pkt.protocol: #Wildcard on "ip" rules
                 continue
+                
             if rule.src_mask & src_ip != rule.src_mask:
                 continue
             if rule.dst_mask & dst_ip != rule.dst_mask:

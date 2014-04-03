@@ -18,9 +18,10 @@ class Firewall(object):
     def __init__(self):
         f = open("firewall_rules.txt",'r')
         
-        protocols = {"ip": 4, "icmp": 1, "tcp": 6, "udp": 17} #mappings from names to protocol numbers
+        protocols = {"ip": -1, "icmp": 1, "tcp": 6, "udp": 17} #mappings from names to protocol number
+        #"ip" is a wildcard for any protocol, so -1
         
-        self.rule_set = [] #Empty list for Rule objects
+        self.rule_set = [] #Empty list for Rule objects        
         self.buckets = Set() #Empty set to store buckets for easy update
         
         for line in f:
@@ -168,7 +169,6 @@ class TokenBucket(object):
         '''
         Return True and decrement tokens if can manage it, False otherwise
         '''
-        
         num_bytes = len(ip_packet.pack()) #Count the number of bytes directly
         if num_bytes <= self.num_tokens:
             self.num_tokens -= num_bytes
