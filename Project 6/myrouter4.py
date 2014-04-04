@@ -230,14 +230,14 @@ class Router(object):
         self.arp_ip = {} #Empty dict for IP's we're waiting for ARPs on
         #Dict because it's faster than queue and we don't care about order
         
-        firewall = Firewall() #New line
+        self.firewall = Firewall() #New line
         
         while True:
             try:
                 self.examineStalled() #deal with stalled that are waiting on ARPs
                 
                 dev,ts,pkt = self.net.recv_packet(timeout=0.5) #Chnged/new lines for Firewall
-                firewall.update_token_buckets()
+                self.firewall.update_token_buckets()
                 
                 payload = pkt.payload
                 if pkt.type == pkt.ARP_TYPE: #Is an ARP
@@ -259,7 +259,7 @@ class Router(object):
                         #Sending dealt with in examineStalled(.) 
                 
                 elif pkt.type == pkt.IP_TYPE:
-                	if self.firewall.allow_pckt(payload): #Change for Firewall 
+                	if self.firewall.allow(payload): #Change for Firewall 
 		                if payload.dstip in self.my_interfaces: #Sent to us
 		                    inner = payload.payload
 		                    if inner.find("icmp") and inner.type == pktlib.TYPE_ECHO_REQUEST:

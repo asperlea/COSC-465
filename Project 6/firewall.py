@@ -256,7 +256,7 @@ def tests():
      
      print len(ip) # print the length of the packet, just for fun
      
-     for i in range(1000): #Trying to break the bucket. Works at a bit above 400
+     for i in range(400): #Trying to break the bucket. Works at a bit above 400
         if i % 100 == 0:
             print i/100            
         assert(f.allow(ip) == True)
