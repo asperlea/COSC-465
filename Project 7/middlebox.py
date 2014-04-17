@@ -65,16 +65,15 @@ class Middlebox(object):
                     
                 if tcppkt.RST or tcppkt.FIN: # write log to file
                     for entry in acc_log:
-                        log.write(acc_log[entry][0] + "  " + entry + "  " + acc_log[entry][1])
-                    log.close()                
+                        log.write(acc_log[entry][0] + "  " + entry + "  " + acc_log[entry][1]) 
+                    acc_log = {}
+                log.flush()              
 
                 # in the end, you should forward the packet out the same
                 # device (and the packet will almost certainly have been                # modified in some way before you send it back out.)
                 self.net.send_packet(dev, pkt)
 
         log_info("Shutting down.")
-        for entry in acc_log:
-            log.write(acc_log[entry][0] + "  " + entry + "  " + acc_log[entry][1])
         log.close() 
 
 

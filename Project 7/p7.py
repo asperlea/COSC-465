@@ -46,22 +46,22 @@ class p7(object):
                 outport = int(str(ippkt.dstip)[-1])
                 actions = [of.ofp_action_output(port = outport)]
                 flowmod = of.ofp_flow_mod(command=of.OFPFC_ADD, idle_timeout=10, hard_timeout=10, buffer_id=event.ofp.buffer_id, match = of.ofp_match.from_packet(packet, inport), actions=actions)
-                event.connect.send(flowmod.pack())
+                event.connection.send(flowmod.pack())
             else:
                 if inport == 5:
                     outport = int(str(ippkt.dstip)[-1])
                     actions = [of.ofp_action_output(port = outport)]
                     flowmod = of.ofp_flow_mod(command=of.OFPFC_ADD, idle_timeout=10, hard_timeout=10, buffer_id=event.ofp.buffer_id, match = of.ofp_match.from_packet(packet, inport), actions=actions)
-                    event.connect.send(flowmod.pack())
+                    event.connection.send(flowmod.pack())
                 else:
                     outport = 5
                     action1 = of.ofp_action_output(port = outport)
-                    action2 = ofp_action_dl_addr.set_dst(EthAddr("00:00:00:00:00:05"))
+                    action2 = of.ofp_action_dl_addr.set_dst(EthAddr("00:00:00:00:00:05"))
                     actions = [action1]
                     actions.append(action2)
                     
                     flowmod = of.ofp_flow_mod(command=of.OFPFC_ADD, idle_timeout=10, hard_timeout=10, buffer_id=event.ofp.buffer_id, match = of.ofp_match.from_packet(packet, inport), actions=actions)
-                    event.connect.send(flowmod.pack())
+                    event.connection.send(flowmod.pack())
                 
 
 def launch():
