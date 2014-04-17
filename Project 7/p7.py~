@@ -56,7 +56,7 @@ class p7(object):
                 else:
                     outport = 5
                     action1 = of.ofp_action_output(port = outport)
-                    action2 = ofp_action_dl_addr.set_dst(EthAddr("00:00:00:00:00:05"))
+                    action2 = of.ofp_action_dl_addr.set_dst(EthAddr("00:00:00:00:00:05"))
                     actions = [action1]
                     actions.append(action2)
                     
