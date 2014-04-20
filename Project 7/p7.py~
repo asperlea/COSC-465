@@ -42,25 +42,31 @@ class p7(object):
         else: 
             # for any TCP traffic, install Openflow rules
             ippkt = packet.payload
-            if ippkt.srcip != IPAddr("10.0.0.4") and ippkt.dstip != IPAddr("10.0.0.4"):
+            if ippkt.srcip != IPAddr("10.0.0.4") and ippkt.dstip != IPAddr("10.0.0.4"): # not from suspicious host
+                #A bit of duplication farther down, but easier than passing through half a dozen vars into a helper
                 outport = int(str(ippkt.dstip)[-1])
                 actions = [of.ofp_action_output(port = outport)]
                 flowmod = of.ofp_flow_mod(command=of.OFPFC_ADD, idle_timeout=10, hard_timeout=10, buffer_id=event.ofp.buffer_id, match = of.ofp_match.from_packet(packet, inport), actions=actions)
+                
                 event.connection.send(flowmod.pack())
             else:
-                if inport == 5:
+                if inport == 5: # if it's coming from the middlebox
                     outport = int(str(ippkt.dstip)[-1])
                     actions = [of.ofp_action_output(port = outport)]
                     flowmod = of.ofp_flow_mod(command=of.OFPFC_ADD, idle_timeout=10, hard_timeout=10, buffer_id=event.ofp.buffer_id, match = of.ofp_match.from_packet(packet, inport), actions=actions)
+                    
                     event.connection.send(flowmod.pack())
                 else:
-                    outport = 5
+                    outport = 5 # otherwise send it to the middlebox for proofing against the NSA and pandas
+                    
                     action1 = of.ofp_action_output(port = outport)
                     action2 = of.ofp_action_dl_addr.set_dst(EthAddr("00:00:00:00:00:05"))
-                    actions = [action1]
+                    
+                    actions = [actionx]
                     actions.append(action2)
                     
                     flowmod = of.ofp_flow_mod(command=of.OFPFC_ADD, idle_timeout=10, hard_timeout=10, buffer_id=event.ofp.buffer_id, match = of.ofp_match.from_packet(packet, inport), actions=actions)
+                    
                     event.connection.send(flowmod.pack())
                 
 

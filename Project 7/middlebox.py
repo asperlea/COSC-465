@@ -74,6 +74,7 @@ class Middlebox(object):
                 self.net.send_packet(dev, pkt)
 
         log_info("Shutting down.")
+        log.flush()
         log.close() 
 
 
