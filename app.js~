@@ -33,7 +33,6 @@ app.io.route('ping', perftests.ping);
 // set up "normal" http routes
 var views = require('./views.js');
 app.get('/', views.index);
-app.get('/tests',views.tests);
 
 app.listen(port);
 console.log("App started on port " + port);

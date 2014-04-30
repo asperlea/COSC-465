@@ -6,3 +6,5 @@ block content
     p I have no results, but I have a message: #{message}
     
     a(href='/tests') Launch tests
+
+
