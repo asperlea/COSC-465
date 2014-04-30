@@ -11,6 +11,7 @@ var myapp = (function(){
     return {
         init: function() {
             console.log("Client-side app starting up");
+			console.log("working");
 			jQuery("#startping").click(start_ping);
         }
     }
