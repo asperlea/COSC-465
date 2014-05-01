@@ -1,18 +1,29 @@
 var myapp = (function(){
-	var start_ping = function() {
+	var next_seq_num = 0;
+	
+	var single_ping = function(seq_num) {
 		var socket = io.connect();  
-		socket.emit('ping', {timestamp: Date.now()});
+		socket.emit('ping', {timestamp: Date.now(), seq_num: seq_num});
 		socket.on('pong', function(data) {
-		    var rtt = Date.now() - data.timestamp;
-		    console.log("Ping RTT (milliseconds): " + rtt);
+			if (seq_num == data.seq_num) {
+				var rtt = Date.now() - data.timestamp;
+				console.log("Ping " + seq_num + " RTT (milliseconds): " + rtt);
+				
+			}
 		});
 	};
-
+	
+	var multi_ping = function(seq_num) {
+		for (i = next_seq_num; i < 5 + next_seq_num; i++) {
+			single_ping(i);
+		}
+		next_seq_num += 5;
+	};
+	
     return {
         init: function() {
             console.log("Client-side app starting up");
-			console.log("working");
-			jQuery("#startping").click(start_ping);
+			jQuery("#startping").click(multi_ping);
         }
     }
 })();

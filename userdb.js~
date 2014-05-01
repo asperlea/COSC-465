@@ -1,4 +1,4 @@
-var userhash = { };  # session ID -> user data
+var userhash = { };  //session ID -> user data
 var next_anonymous = 1; 
 
 var add_user = function(id, user) {
@@ -10,7 +10,8 @@ var add_user = function(id, user) {
         userhash[id] = {
             'id': id,
             'user': user,
-            'latency_results': []
+            'latency_results': [],
+            'pings_sent': 0
         };
     }
     return userhash[id];

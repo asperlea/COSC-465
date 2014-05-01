@@ -7,7 +7,7 @@ var myapp = (function(){
 		    console.log("Ping RTT (milliseconds): " + rtt);
 		});
 	};
-
+	
     return {
         init: function() {
             console.log("Client-side app starting up");
