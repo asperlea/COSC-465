@@ -10,7 +10,8 @@ var add_user = function(id, user) {
         userhash[id] = {
             'id': id,
             'user': user,
-            'latency_results': []
+            'latency_results': [],
+			'throughput_results': []
         };
     }
     return userhash[id];
@@ -21,11 +22,22 @@ var logresults = function(req) {
 	var avg = req.data.avg;
 	
 	add_user(id, undefined); //be sure they're in there
-	userhash[id].latency_results = avg;
+	userhash[id].latency_results.push(avg);
 	console.log("Logged avg of " + avg + " for " + userhash[id].user + "'s test");
 };
 
+var logthroughput = function(req) {
+	var id = req.session.id;
+	var throughput = req.data.throughput;
+	console.log("Throughput here is " + throughput);
+
+	add_user(id, undefined); //be sure they're in there
+	userhash[id].throughput_results.push(throughput);
+	console.log("Logged throughput of " + throughput + " for " + userhash[id].user + "'s test");
+};
+
 exports.logresults = logresults;
+exports.logthroughput = logthroughput;
 exports.add_user = add_user;
 exports.get_user_name = function(id) {
     if (userhash[id] === undefined) {

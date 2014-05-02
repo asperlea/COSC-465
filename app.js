@@ -31,6 +31,8 @@ var perftests = require('./perftests.js');
 var userdb = require ('./userdb.js');
 app.io.route('ping', perftests.ping);
 app.io.route('logresults', userdb.logresults);
+app.io.route('file', perftests.file);
+app.io.route('logthroughput', userdb.logthroughput);
 
 // set up "normal" http routes
 var views = require('./views.js');

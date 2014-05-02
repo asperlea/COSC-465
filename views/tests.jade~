@@ -7,5 +7,11 @@ block content
             a(href="/") Home
 
         a#startping(href="#") Latency test
+        
+        p#ping_results
+
+        a#startthroughput(href='#') Throughput test
+        
+        p#throughput_results
 
     div#status

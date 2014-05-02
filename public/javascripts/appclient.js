@@ -30,11 +30,31 @@ var myapp = (function(){
 			}
 		});
 	};
+
+	var start_throughput = function() {
+		var throughput;
+		var fake_file = new Float64Array(12800);
+		var socket = io.connect();
+		
+		var my_id = listener_id; // uniquely id start_throughput funcs
+
+		socket.emit('file', {timestamp: Date.now(), file_id: my_id, content: fake_file});
+		console.log("Got here");
+		socket.on('received' + my_id, function(data) {
+			var rtt = Date.now() - data.timestamp;
+			throughput = 12800 * 8 * 2 / rtt; 
+
+			socket.emit('logthroughput', {throughput: throughput}); // send off test results to database
+
+			jQuery("#throughput_results").text("Test average: " + throughput + "bytes.");
+		});
+	};
 	
     return {
         init: function() {
             console.log("Client-side app starting up");
-			jQuery("#startping").click(start_ping);
+	    jQuery("#startping").click(start_ping);
+	    jQuery("#startthroughput").click(start_throughput);
         }
     }
 })();

@@ -5,4 +5,9 @@ exports.ping = function(req) {
     //uniquely identify which listener the message is meant for
 };
 
+exports.file = function(req) {
+    console.log("Received file");
+    req.io.emit('received' + req.data.file_id, req.data);
+};
+
 
