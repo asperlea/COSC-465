@@ -39,11 +39,12 @@ var myapp = (function(){
 		var my_id = listener_id; // uniquely id start_throughput funcs
 
 		socket.emit('file', {timestamp: Date.now(), file_id: my_id, content: fake_file});
-		console.log("Got here");
 		socket.on('received' + my_id, function(data) {
 			var rtt = Date.now() - data.timestamp;
 			throughput = 12800 * 8 * 2 / rtt; // rtt is in ms so to get bytes/second 
-			throughput = throughput / 1000;
+			console.log("Throughput is " + throughput);
+			throughput = throughput * 1000;
+			console.log("Throughput is " + throughput);
 
 			socket.emit('logthroughput', {throughput: throughput}); // send off test results to database
 
