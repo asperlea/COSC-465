@@ -42,7 +42,8 @@ var myapp = (function(){
 		console.log("Got here");
 		socket.on('received' + my_id, function(data) {
 			var rtt = Date.now() - data.timestamp;
-			throughput = 12800 * 8 * 2 / (1000 * rtt); // rtt is in ms so to get bytes/second 
+			throughput = 12800 * 8 * 2 / rtt; // rtt is in ms so to get bytes/second 
+			throughput = throughput / 1000;
 
 			socket.emit('logthroughput', {throughput: throughput}); // send off test results to database
 
