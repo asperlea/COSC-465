@@ -33,7 +33,7 @@ var myapp = (function(){
 
 	var start_throughput = function() {
 		var throughput;
-		var fake_file = new Float64Array(12800);
+		var fake_file = new Float64Array(12800); // size of this is 12800 * 8 bytes per float
 		var socket = io.connect();
 		
 		var my_id = listener_id; // uniquely id start_throughput funcs
@@ -42,11 +42,11 @@ var myapp = (function(){
 		console.log("Got here");
 		socket.on('received' + my_id, function(data) {
 			var rtt = Date.now() - data.timestamp;
-			throughput = 12800 * 8 * 2 / rtt; 
+			throughput = 12800 * 8 * 2 / (1000 * rtt); // rtt is in ms so to get bytes/second 
 
 			socket.emit('logthroughput', {throughput: throughput}); // send off test results to database
 
-			jQuery("#throughput_results").text("Test average: " + throughput + "bytes.");
+			jQuery("#throughput_results").text("Test average: " + throughput + " bytes/second.");
 		});
 	};
 	
